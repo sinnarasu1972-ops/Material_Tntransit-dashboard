@@ -34,7 +34,7 @@ def load_data():
     global df
     try:
         if not os.path.exists(EXCEL_FILE):
-            print(f"⚠️  Excel file not found at {EXCEL_FILE}")
+            print(f"  Excel file not found at {EXCEL_FILE}")
             print(f"Please ensure Material_Intransit_All_Divisions.xlsx is in the project root or set EXCEL_FILE environment variable")
             df = pd.DataFrame()
         else:
@@ -485,8 +485,8 @@ def read_root():
     <body>
         <div class="container">
             <div class="header">
-                <h1>🚗 Unnati Motors Material In Transit Dashboard</h1>
-                <p>Real-time tracking of material in transit across all divisions</p>
+                <h1>Unnati Motors Material In Transit Dashboard</h1>
+               
             </div>
 
             <div class="filters-section">
@@ -777,6 +777,6 @@ def read_root():
     return html_content
 
 if __name__ == "__main__":
-    print("🚀 Starting Unnati Motors Material In Transit Dashboard...")
-    print("📊 Dashboard: http://localhost:8000")
+    print(" Starting Unnati Motors Material In Transit Dashboard...")
+    print(" Dashboard: http://localhost:8000")
     uvicorn.run(app, host="0.0.0.0", port=8000)
