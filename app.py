@@ -34,15 +34,15 @@ def load_data():
     global df
     try:
         if not os.path.exists(EXCEL_FILE):
-            print(f"  Excel file not found at {EXCEL_FILE}")
+            print(f"Excel file not found at {EXCEL_FILE}")
             print(f"Please ensure Material_Intransit_All_Divisions.xlsx is in the project root or set EXCEL_FILE environment variable")
             df = pd.DataFrame()
         else:
             df = pd.read_excel(EXCEL_FILE)
             df = clean_dataframe(df)
-            print(f"✓ Data loaded: {len(df)} rows")
+            print(f"Data loaded: {len(df)} rows")
     except Exception as e:
-        print(f"✗ Error loading data: {e}")
+        print(f"Error loading data: {e}")
         df = pd.DataFrame()
 
 @app.get("/api/filters")
@@ -62,16 +62,20 @@ def get_filters():
         age_bucket_order = ['<5 Days', '5-10 Days', '10-20 Days', '20-30 Days', '30-60 Days', '>60 Days']
         age_buckets = [ab for ab in age_bucket_order if ab in age_buckets_raw]
         
+        # LR Details - check if LR No. column has values
+        lr_details = ['LR Generated', 'LR Not Generated']
+        
         return {
             "divisions": divisions,
             "age_buckets": age_buckets,
-            "transporters": [""] + transporters if transporters else [""]
+            "transporters": [""] + transporters if transporters else [""],
+            "lr_details": lr_details
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/data")
-def get_data(division: str = None, age_bucket: str = None, transporter: str = None, po_no: str = None):
+def get_data(division: str = None, age_bucket: str = None, transporter: str = None, po_no: str = None, lr_details: str = None):
     try:
         if df.empty:
             return {"total_records": 0, "data": []}
@@ -89,6 +93,14 @@ def get_data(division: str = None, age_bucket: str = None, transporter: str = No
         
         if po_no and po_no.strip():
             filtered_df = filtered_df[filtered_df['Po No'].astype(str).str.contains(po_no.strip(), case=False, na=False)]
+        
+        if lr_details and lr_details != "All" and lr_details.strip():
+            if lr_details == "LR Generated":
+                # LR Generated means LR No. column has a value (not blank)
+                filtered_df = filtered_df[filtered_df['LR No.'].astype(str).str.strip() != '']
+            elif lr_details == "LR Not Generated":
+                # LR Not Generated means LR No. column is blank
+                filtered_df = filtered_df[filtered_df['LR No.'].astype(str).str.strip() == '']
         
         data_dict = filtered_df.to_dict('records')
         
@@ -108,7 +120,7 @@ def get_data(division: str = None, age_bucket: str = None, transporter: str = No
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/export")
-def export_data(division: str = None, age_bucket: str = None, transporter: str = None, po_no: str = None):
+def export_data(division: str = None, age_bucket: str = None, transporter: str = None, po_no: str = None, lr_details: str = None):
     try:
         if df.empty:
             raise HTTPException(status_code=400, detail="No data available to export")
@@ -126,6 +138,14 @@ def export_data(division: str = None, age_bucket: str = None, transporter: str =
         
         if po_no and po_no.strip():
             filtered_df = filtered_df[filtered_df['Po No'].astype(str).str.contains(po_no.strip(), case=False, na=False)]
+        
+        if lr_details and lr_details != "All" and lr_details.strip():
+            if lr_details == "LR Generated":
+                # LR Generated means LR No. column has a value (not blank)
+                filtered_df = filtered_df[filtered_df['LR No.'].astype(str).str.strip() != '']
+            elif lr_details == "LR Not Generated":
+                # LR Not Generated means LR No. column is blank
+                filtered_df = filtered_df[filtered_df['LR No.'].astype(str).str.strip() == '']
         
         export_df = filtered_df.copy()
         
@@ -486,7 +506,7 @@ def read_root():
         <div class="container">
             <div class="header">
                 <h1>Unnati Motors Material In Transit Dashboard</h1>
-               
+                <p>Real-time tracking of material in transit across all divisions</p>
             </div>
 
             <div class="filters-section">
@@ -517,11 +537,18 @@ def read_root():
                         <label for="poNo">Search SPO No</label>
                         <input type="text" id="poNo" placeholder="Enter SPO No..." />
                     </div>
+
+                    <div class="filter-group">
+                        <label for="lrDetails">LR Details</label>
+                        <select id="lrDetails" onchange="applyFilters()">
+                            <option value="All">All LR Details</option>
+                        </select>
+                    </div>
                 </div>
 
                 <div class="button-group">
                     <button class="btn btn-primary" onclick="applyFilters()">Apply Filters</button>
-                    <button class="btn btn-export" onclick="exportData()">📥 Export to Excel</button>
+                    <button class="btn btn-export" onclick="exportData()">Export to Excel</button>
                     <button class="btn btn-clear" onclick="clearFilters()">Clear All</button>
                 </div>
             </div>
@@ -584,6 +611,7 @@ def read_root():
                     populateSelect('division', response.data.divisions);
                     populateSelect('ageBucket', response.data.age_buckets);
                     populateSelect('transporter', response.data.transporters);
+                    populateSelect('lrDetails', response.data.lr_details);
                 } catch (error) {
                     console.error('Error loading filters:', error);
                     document.getElementById('tableContainer').innerHTML = '<div class="error">Error loading filters</div>';
@@ -611,6 +639,7 @@ def read_root():
                 const ageBucket = document.getElementById('ageBucket').value;
                 const transporter = document.getElementById('transporter').value;
                 const poNo = document.getElementById('poNo').value;
+                const lrDetails = document.getElementById('lrDetails').value;
 
                 document.getElementById('tableContainer').innerHTML = '<div class="loading"><div class="spinner"></div>Loading data...</div>';
 
@@ -620,7 +649,8 @@ def read_root():
                             division: division === 'All' ? null : division,
                             age_bucket: ageBucket === 'All' ? null : ageBucket,
                             transporter: transporter === 'All' ? null : transporter,
-                            po_no: poNo || null
+                            po_no: poNo || null,
+                            lr_details: lrDetails === 'All' ? null : lrDetails
                         }
                     });
 
@@ -720,12 +750,14 @@ def read_root():
                 const ageBucket = document.getElementById('ageBucket').value;
                 const transporter = document.getElementById('transporter').value;
                 const poNo = document.getElementById('poNo').value;
+                const lrDetails = document.getElementById('lrDetails').value;
 
                 const params = new URLSearchParams();
                 if (division !== 'All') params.append('division', division);
                 if (ageBucket !== 'All') params.append('age_bucket', ageBucket);
                 if (transporter !== 'All') params.append('transporter', transporter);
                 if (poNo) params.append('po_no', poNo);
+                if (lrDetails !== 'All') params.append('lr_details', lrDetails);
 
                 try {
                     const url = `/api/export?${params.toString()}`;
@@ -763,6 +795,7 @@ def read_root():
                 document.getElementById('ageBucket').value = 'All';
                 document.getElementById('transporter').value = 'All';
                 document.getElementById('poNo').value = '';
+                document.getElementById('lrDetails').value = 'All';
                 applyFilters();
             }
 
@@ -777,6 +810,6 @@ def read_root():
     return html_content
 
 if __name__ == "__main__":
-    print(" Starting Unnati Motors Material In Transit Dashboard...")
-    print(" Dashboard: http://localhost:8000")
+    print("Starting Unnati Motors Material In Transit Dashboard...")
+    print("Dashboard: http://localhost:8000")
     uvicorn.run(app, host="0.0.0.0", port=8000)
